@@ -64,63 +64,81 @@ def _beliefs() -> str:
         return f"_(couldn't read memory: {exc})_"
 
 
+def _thinking(text):
+    return {"role": "assistant", "content": text}
+
+
 def start(persona_choice):
-    """Open a fresh session for the chosen persona and get the first look."""
+    """Open a fresh session for the chosen persona and get the first look.
+
+    A generator: it yields an instant 'thinking' bubble so the click gives
+    immediate feedback, then yields the real first look. The whole body is
+    guarded so any failure shows up in the chat instead of silently doing
+    nothing.
+    """
     if not clueless.ids_present():
         note = (
             "⚠️ The agent isn't provisioned yet. Run `python create_agent.py` "
             "(with `ANTHROPIC_API_KEY` set) first, then reload this page."
         )
-        return [{"role": "assistant", "content": note}], None, _beliefs()
+        yield [_thinking(note)], None, _beliefs()
+        return
 
-    persona = None if persona_choice == INTERVIEW else persona_choice
-    client = _client()
-    agent_id, environment_id, memory_store_id = clueless.read_ids()
-    session = clueless.start_session(
-        client, agent_id, environment_id, memory_store_id,
-        title=f"Cher's Closet — {persona or 'interview'}",
+    yield (
+        [_thinking("👗 Reading your memory and putting a first look together… "
+                   "the first turn can take up to a minute.")],
+        None,
+        gr.update(),
     )
 
-    persona_text = clueless.load_persona(persona)
-    items, closet_src = clueless.load_closet(persona or "none")
-    using_fallback = "FALLBACK" in closet_src
-    kickoff = clueless.build_kickoff(persona_text, items, using_fallback)
-
     try:
+        persona = None if persona_choice == INTERVIEW else persona_choice
+        client = _client()
+        agent_id, environment_id, memory_store_id = clueless.read_ids()
+        session = clueless.start_session(
+            client, agent_id, environment_id, memory_store_id,
+            title=f"Cher's Closet — {persona or 'interview'}",
+        )
+        persona_text = clueless.load_persona(persona)
+        items, closet_src = clueless.load_closet(persona or "none")
+        using_fallback = "FALLBACK" in closet_src
+        kickoff = clueless.build_kickoff(persona_text, items, using_fallback)
+
         text_parts, notes = clueless.run_turn(client, session.id, kickoff)
         reply = "".join(text_parts).strip() or "_(no reply)_"
+        yield [{"role": "assistant", "content": reply + _notes_md(notes)}], session.id, _beliefs()
     except Exception as exc:
-        reply = f"⚠️ {exc}"
-        notes = []
-
-    history = [{"role": "assistant", "content": reply + _notes_md(notes)}]
-    return history, session.id, _beliefs()
+        yield [{"role": "assistant", "content": f"⚠️ Something went wrong: {exc}"}], None, gr.update()
 
 
 def send(message, history, session_id):
     message = (message or "").strip()
     if not message:
-        return history, session_id, "", gr.update()
+        yield history, session_id, "", gr.update()
+        return
     if session_id is None:
-        history = history + [
-            {"role": "assistant", "content": "Pick who I'm dressing above and hit **Meet my stylist** first. 💁"}
-        ]
-        return history, session_id, "", gr.update()
+        yield (
+            history + [_thinking("Pick who I'm dressing above and hit **Meet my stylist** first. 💁")],
+            session_id, "", gr.update(),
+        )
+        return
 
-    history = history + [{"role": "user", "content": message}]
+    base = history + [{"role": "user", "content": message}]
+    yield base + [_thinking("💭 thinking…")], session_id, "", gr.update()
+
     try:
         text_parts, notes = clueless.run_turn(_client(), session_id, message)
         reply = "".join(text_parts).strip() or "_(no reply)_"
     except Exception as exc:
         reply, notes = f"⚠️ {exc}", []
 
-    history = history + [{"role": "assistant", "content": reply + _notes_md(notes)}]
-    return history, session_id, "", _beliefs()
+    yield base + [{"role": "assistant", "content": reply + _notes_md(notes)}], session_id, "", _beliefs()
 
 
 def rate(score, comment, history, session_id):
     if session_id is None:
-        return history, "", gr.update()
+        yield history, "", gr.update()
+        return
 
     score = int(score)
     comment = (comment or "").strip()
@@ -132,21 +150,22 @@ def rate(score, comment, history, session_id):
             {"ts": datetime.now(timezone.utc).isoformat(), "score": score, "text": comment}
         ) + "\n")
 
+    base = history + [{"role": "user", "content": f"⭐ {reaction}"}]
+    yield base + [_thinking("💭 logging that and thinking…")], "", gr.update()
+
     prompt = (
         f"Here's my reaction to that outfit — {reaction}. Log it to "
         "observations.jsonl. If it conflicts with something you already believe, "
         "contest the belief rather than flipping it, and ask me the one attribution "
         "question that would tell you which dimension actually drove the reaction."
     )
-    history = history + [{"role": "user", "content": f"⭐ {reaction}"}]
     try:
         text_parts, notes = clueless.run_turn(_client(), session_id, prompt)
         reply = "".join(text_parts).strip() or "_(no reply)_"
     except Exception as exc:
         reply, notes = f"⚠️ {exc}", []
 
-    history = history + [{"role": "assistant", "content": reply + _notes_md(notes)}]
-    return history, "", _beliefs()
+    yield base + [{"role": "assistant", "content": reply + _notes_md(notes)}], "", _beliefs()
 
 
 CUTE_THEME = gr.themes.Soft(
