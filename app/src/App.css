@@ -1,49 +1,111 @@
-* { box-sizing: border-box; margin: 0; }
+/* App-level layout on top of theme.css (the Classical design system tokens).
+   Everything colors/type/spacing comes from var(--*) — no ad-hoc values where
+   a token exists. Leopard rails = Cher's wardrobe computer, in the accent ramp. */
 
-body {
-  font-family: -apple-system, 'Helvetica Neue', sans-serif;
-  background: #faf8f5;
-  color: #1c1917;
+.tnum { font-feature-settings: 'tnum'; }
+
+.wardrobe {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(24px, 90px) minmax(0, 1fr) minmax(24px, 90px);
 }
 
-main { max-width: 1080px; margin: 0 auto; padding: 40px 24px 80px; }
-
-header { margin-bottom: 40px; }
-h1 { font-size: 42px; letter-spacing: -1px; }
-.headline { font-size: 18px; color: #57534e; margin-top: 6px; }
-.updated { font-size: 12px; color: #a8a29e; margin-top: 4px; }
-
-section { margin-bottom: 44px; }
-h2 { font-size: 22px; margin-bottom: 4px; }
-.blurb { color: #57534e; font-size: 14px; margin-bottom: 14px; }
-
-.row { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
-
-.card {
-  background: #fff;
-  border: 1px solid #e7e5e4;
-  border-radius: 12px;
-  overflow: hidden;
-  transition: transform .12s ease, box-shadow .12s ease;
+/* Leopard-print side rails, drawn from the accent/neutral ramps and given the
+   same archival grade as .plate so they sit back like the movie's CRT bezel. */
+.rail {
+  background-color: var(--color-accent-200);
+  background-image:
+    radial-gradient(ellipse 14px 10px at 22px 18px, var(--color-neutral-900) 38%, transparent 42%),
+    radial-gradient(ellipse 12px 9px at 60px 52px, var(--color-neutral-900) 38%, transparent 42%),
+    radial-gradient(ellipse 13px 11px at 30px 92px, var(--color-neutral-900) 38%, transparent 42%),
+    radial-gradient(ellipse 12px 9px at 66px 128px, var(--color-neutral-900) 38%, transparent 42%),
+    radial-gradient(ellipse 20px 15px at 24px 20px, var(--color-accent-600) 55%, transparent 60%),
+    radial-gradient(ellipse 18px 14px at 62px 54px, var(--color-accent-500) 55%, transparent 60%),
+    radial-gradient(ellipse 19px 16px at 32px 94px, var(--color-accent-600) 55%, transparent 60%),
+    radial-gradient(ellipse 18px 13px at 68px 130px, var(--color-accent-500) 55%, transparent 60%);
+  background-size: 74px 118px;
+  filter: sepia(0.22) saturate(0.82) contrast(1.05);
+  border-left: 1px solid var(--color-divider);
+  border-right: 1px solid var(--color-divider);
 }
-.card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.08); }
 
-.card-img { aspect-ratio: 1; background: #fff; display: flex; align-items: center; justify-content: center; }
-.card-img img { width: 100%; height: 100%; object-fit: contain; }
+.page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-8) var(--space-8);
+  width: 100%;
+}
 
-.card-body { padding: 12px 14px 14px; }
-.chip {
-  display: inline-block;
+/* Masthead */
+.masthead { border-bottom: 1px solid var(--color-divider); padding-bottom: var(--space-4); margin-bottom: var(--space-6); }
+.masthead > div { display: flex; align-items: baseline; gap: var(--space-4); }
+.brand { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 34px; letter-spacing: 0.02em; }
+.issue { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-neutral-600); }
+.headline { font-size: 16px; color: var(--color-neutral-700); margin: var(--space-2) 0 0; text-align: justify; }
+.updated { font-size: 12px; color: var(--color-neutral-500); margin: var(--space-1) 0 0; }
+
+/* Section headers */
+.section-rule { margin-bottom: var(--space-4); }
+.section-rule h2 { font-size: 26px; margin-bottom: var(--space-1); }
+.blurb { font-size: 13.5px; color: var(--color-neutral-600); text-align: justify; margin: 0; }
+
+/* The ensemble: stacked slot cards, Cher's browse panels */
+.ensemble { margin-bottom: var(--space-8); }
+.slot {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-100);
+  display: grid;
+  grid-template-columns: 170px 1fr auto;
+  gap: var(--space-5);
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-3);
+}
+.slot-plate { padding: 8px; background: #fff; }
+.slot-plate img, .swap-plate img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff; }
+.slot-kicker { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-accent-700); margin-bottom: 4px; }
+.slot-name { font-size: 23px; margin: 0 0 4px; line-height: 1.15; text-transform: capitalize; }
+.slot-reason { font-size: 13px; color: var(--color-neutral-600); margin: 0; line-height: 1.6; text-align: justify; }
+.slot-arrows { display: flex; gap: var(--space-2); }
+.arrow {
+  width: 36px; height: 36px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 16px; color: var(--color-neutral-400);
+}
+
+/* Secondary sections: the drawers */
+.drawer { margin-bottom: var(--space-8); }
+.drawer-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-4); }
+.swap { margin: 0; }
+.swap-plate { padding: 6px; background: #fff; margin-bottom: var(--space-2); }
+.swap-name { font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 17px; line-height: 1.2; text-transform: capitalize; margin-bottom: 2px; }
+
+/* Bottom category ticker, like the movie's SHOES JEWELRY SCARVES strip */
+.ticker {
+  border-top: 1px solid var(--color-divider);
+  border-bottom: 1px solid var(--color-divider);
+  padding: var(--space-2) 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  justify-content: center;
+}
+.ticker span {
   font-size: 11px;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  letter-spacing: .5px;
-  background: #f5f5f4;
-  color: #78716c;
-  border-radius: 999px;
-  padding: 2px 8px;
-  margin-bottom: 6px;
+  color: var(--color-neutral-600);
 }
-.name { font-size: 14px; font-weight: 600; text-transform: capitalize; }
-.reason { font-size: 12.5px; color: #78716c; margin-top: 6px; line-height: 1.4; }
+.ticker span::after { content: '·'; margin-left: var(--space-4); color: var(--color-divider); }
+.ticker span:last-child::after { content: ''; }
 
-footer { color: #a8a29e; font-size: 13px; border-top: 1px solid #e7e5e4; padding-top: 20px; }
+.colophon { font-size: 12.5px; color: var(--color-neutral-500); font-style: italic; text-align: center; margin-top: var(--space-4); }
+
+@media (max-width: 720px) {
+  .wardrobe { grid-template-columns: 12px minmax(0, 1fr) 12px; }
+  .slot { grid-template-columns: 110px 1fr; }
+  .slot-arrows { display: none; }
+}
