@@ -1,0 +1,38 @@
+{
+  "updated": "2026-07-17 3:05 PM",
+  "headline": "Starter picks while I learn your taste — react to anything and I'll re-query.",
+  "sections": [
+    {
+      "heading": "Weekend adventure — a full curated look",
+      "blurb": "A real human-curated outfit from the dataset (set 118506459): checked blouse anchored by neutral denim, with the bag echoing the top's pattern.",
+      "items": [
+        { "item_id": "105298041", "category": "tops", "name": "carven checked cross-over blouse", "reason": "The focal point — one pattern, everything else stays quiet." },
+        { "item_id": "106951141", "category": "bottoms", "name": "seven for all mankind cotton", "reason": "Neutral denim grounds the look." },
+        { "item_id": "105678196", "category": "shoes", "name": "stella mccartney zip chain sandal", "reason": "Hardware detail without competing." },
+        { "item_id": "105574720", "category": "bags", "name": "blugirl white black lizard print", "reason": "Echoes the black/white of the blouse — repetition creates unity." },
+        { "item_id": "106718596", "category": "sunglasses", "name": "cannes lace sunglasses", "reason": "The one playful accent." }
+      ]
+    },
+    {
+      "heading": "Weekend away — dressier take",
+      "blurb": "Another curated set (122355105): same casual register, one notch dressier.",
+      "items": [
+        { "item_id": "108484200", "category": "tops", "name": "no wrap ruffle top", "reason": "Soft volume up top…" },
+        { "item_id": "106840511", "category": "bottoms", "name": "dolce gabbana shorts", "reason": "…balanced by a fitted bottom." },
+        { "item_id": "109019386", "category": "shoes", "name": "giuseppe zanotti suede embellished lace-up", "reason": "The statement piece of this look." },
+        { "item_id": "106908636", "category": "bags", "name": "bottega veneta woven napa wristlet", "reason": "Texture instead of pattern." },
+        { "item_id": "109804779", "category": "jewellery", "name": "isabel marant paris lovers necklace", "reason": "Minimal finisher." }
+      ]
+    },
+    {
+      "heading": "Wildcards — tell me which of these you'd actually wear",
+      "blurb": "Deliberately different directions so I can calibrate. Yes/no on each teaches me more than a whole outfit.",
+      "items": [
+        { "item_id": "101555092", "category": "outerwear", "name": "black leather biker jacket", "reason": "Edgy direction?" },
+        { "item_id": "107419050", "category": "tops", "name": "closet essential perfect white shirt", "reason": "Minimal classic direction?" },
+        { "item_id": "100059862", "category": "outerwear", "name": "denim jacket", "reason": "Casual staple direction?" },
+        { "item_id": "195213892", "category": "shoes", "name": "vetements black reflector-heel boots", "reason": "High-fashion direction?" }
+      ]
+    }
+  ]
+}
