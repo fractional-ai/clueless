@@ -37,6 +37,17 @@ WADA = Path("samples/sanzo-wada/colors.json")
 
 REQUIRED_IDS = (".agent_id", ".environment_id", ".memory_store_id")
 
+# Read by the agent when the store mounts — restates the doctrine that travels
+# with the session. Shared by the CLI and the UI so both open identical sessions.
+MEMORY_INSTRUCTIONS = (
+    "This person's taste, learned across sessions. Read it before "
+    "anything else. observations.jsonl is append-only — never edit "
+    "a line. beliefs.md is derived and rewritable. Taste "
+    "accumulates; newer feedback does not supersede an established "
+    "belief. On a conflict, mark the belief contested and ask which "
+    "dimension actually drove the reaction."
+)
+
 
 # ---------------------------------------------------------------- closet loading
 
@@ -182,6 +193,88 @@ def drain(client: Anthropic, session_id: str, message: str) -> None:
                 return
 
 
+def run_turn(client: Anthropic, session_id: str, message: str) -> tuple[list[str], list[str]]:
+    """Programmatic sibling of drain(): send one message, return (text_parts,
+    memory_notes). Used by the UI, which needs the reply as a value rather than
+    streamed to stdout the way drain() does for the CLI."""
+    text_parts: list[str] = []
+    memory_notes: list[str] = []
+    with client.beta.sessions.events.stream(session_id) as stream:
+        client.beta.sessions.events.send(
+            session_id,
+            events=[{"type": "user.message", "content": [{"type": "text", "text": message}]}],
+        )
+        for event in stream:
+            if event.type == "agent.message":
+                for block in event.content:
+                    if getattr(block, "type", None) == "text":
+                        text_parts.append(block.text)
+            elif event.type == "agent.tool_use":
+                inp = getattr(event, "input", {}) or {}
+                target = str(inp.get("path") or inp.get("file_path") or inp.get("command") or "")
+                if "/mnt/memory" in target:
+                    memory_notes.append(f"{getattr(event, 'name', '?')} {target}")
+            elif event.type == "session.error":
+                msg = getattr(getattr(event, "error", None), "message", event)
+                raise RuntimeError(str(msg))
+            elif event.type == "session.status_terminated":
+                raise RuntimeError("session terminated")
+            elif event.type == "session.status_idle":
+                stop = getattr(event, "stop_reason", None)
+                if getattr(stop, "type", None) == "requires_action":
+                    continue
+                break
+    return text_parts, memory_notes
+
+
+def ids_present() -> bool:
+    """True once create_agent.py has written the three id files."""
+    return all(Path(f).exists() for f in REQUIRED_IDS)
+
+
+def read_ids() -> tuple[str, str, str]:
+    missing = [f for f in REQUIRED_IDS if not Path(f).exists()]
+    if missing:
+        raise SystemExit(f"Missing {', '.join(missing)}. Run: python create_agent.py")
+    agent_id, environment_id, memory_store_id = (Path(f).read_text().strip() for f in REQUIRED_IDS)
+    return agent_id, environment_id, memory_store_id
+
+
+def start_session(client: Anthropic, agent_id: str, environment_id: str,
+                  memory_store_id: str, title: str = "Clueless"):
+    """Create a session with the memory store (read_write) and Wada's colours
+    mounted. Shared by the CLI and the UI so both open identical sessions."""
+    with open(WADA, "rb") as f:
+        colors_file = client.beta.files.upload(file=("colors.json", f, "application/json"))
+    return client.beta.sessions.create(
+        agent=agent_id,
+        environment_id=environment_id,
+        title=title,
+        resources=[
+            {
+                "type": "memory_store",
+                "memory_store_id": memory_store_id,
+                "access": "read_write",
+                "instructions": MEMORY_INSTRUCTIONS,
+            },
+            {"type": "file", "file_id": colors_file.id, "mount_path": "/workspace/colors.json"},
+        ],
+    )
+
+
+def memory_snapshot(client: Anthropic, store_id: str) -> str:
+    """Markdown view of the whole store — for the UI's 'what it believes' panel."""
+    page = client.beta.memory_stores.memories.list(store_id, path_prefix="/")
+    entries = sorted((i for i in page.data if i.type == "memory"), key=lambda i: i.path)
+    if not entries:
+        return "_(memory is empty — nothing learned yet)_"
+    blocks = []
+    for item in entries:
+        got = client.beta.memory_stores.memories.retrieve(item.id, memory_store_id=store_id)
+        blocks.append(f"**{item.path}**\n\n```\n{(got.content or '').strip()}\n```")
+    return "\n\n".join(blocks)
+
+
 def dump_memory(client: Anthropic, store_id: str) -> None:
     page = client.beta.memory_stores.memories.list(store_id, path_prefix="/")
     items = sorted(page.data, key=lambda i: i.path)
@@ -205,13 +298,7 @@ def main() -> None:
     load_dotenv()
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise SystemExit("No ANTHROPIC_API_KEY found. Put it in .env or export it.")
-    missing = [f for f in REQUIRED_IDS if not Path(f).exists()]
-    if missing:
-        raise SystemExit(f"Missing {', '.join(missing)}. Run: python create_agent.py")
-
-    agent_id = Path(".agent_id").read_text().strip()
-    environment_id = Path(".environment_id").read_text().strip()
-    memory_store_id = Path(".memory_store_id").read_text().strip()
+    agent_id, environment_id, memory_store_id = read_ids()
 
     persona = None if args.no_persona else args.persona
     persona_text = load_persona(persona)
@@ -229,31 +316,9 @@ def main() -> None:
     print(f"persona: {persona or '(none — interactive interview)'}")
     print(f"memory:  {memory_store_id}")
 
-    # Mount Wada's colours so the agent can read them with its own tools rather
-    # than us pasting 85KB into every kickoff.
-    with open(WADA, "rb") as f:
-        colors_file = client.beta.files.upload(file=("colors.json", f, "application/json"))
-
-    session = client.beta.sessions.create(
-        agent=agent_id,
-        environment_id=environment_id,
+    session = start_session(
+        client, agent_id, environment_id, memory_store_id,
         title=f"Clueless — {persona or 'interactive'}",
-        resources=[
-            {
-                "type": "memory_store",
-                "memory_store_id": memory_store_id,
-                "access": "read_write",
-                "instructions": (
-                    "This person's taste, learned across sessions. Read it before "
-                    "anything else. observations.jsonl is append-only — never edit "
-                    "a line. beliefs.md is derived and rewritable. Taste "
-                    "accumulates; newer feedback does not supersede an established "
-                    "belief. On a conflict, mark the belief contested and ask which "
-                    "dimension actually drove the reaction."
-                ),
-            },
-            {"type": "file", "file_id": colors_file.id, "mount_path": "/workspace/colors.json"},
-        ],
     )
     print(f"session: {session.id}")
     print(f"trace:   https://platform.claude.com/sessions/{session.id}\n")
