@@ -104,6 +104,8 @@ Eight synthetic users in [`personas/`](./personas/README.md) — ages 15–75, a
 
 ## Setup
 
+Fresh clone? Run `./scripts/setup.sh` — full walkthrough in [SETUP.md](SETUP.md).
+
 ```bash
 pip install -r requirements.txt
 ```
