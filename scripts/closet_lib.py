@@ -4,7 +4,7 @@ TOPS = {0, 1, 2, 3, 4, 5, 9, 10, 11, 12}
 BOTTOMS = {6, 7, 8}
 ACCESSORIES = {13, 14, 15, 17, 18, 19, 21, 22, 23, 24, 25, 26}
 
-GROUP_TARGETS = {"tops": 40, "bottoms": 30, "accessories": 30}
+GROUP_TARGETS = {"tops": 400, "bottoms": 300, "accessories": 300}
 MIN_BOX = {"tops": 100, "bottoms": 100, "accessories": 60}
 MATERIAL_SUPERCATS = {"leather", "non-textile material type"}
 

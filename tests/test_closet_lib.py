@@ -34,14 +34,14 @@ def test_sample_respects_targets_and_image_cap():
     anns = []
     n = 0
     # 3 candidates per image -> cap of 2/image must bite
-    for img in range(200):
+    for img in range(2000):
         for _ in range(3):
             n += 1
             cid = [6, 0, 24][n % 3]
             size = 60 if cid == 24 else 100
             anns.append(ann(n, cid, img, size, size))
     picked = sample_items(anns, random.Random(42))
-    assert len(picked) == sum(GROUP_TARGETS.values()) == 100
+    assert len(picked) == sum(GROUP_TARGETS.values()) == 1000
     from collections import Counter
     per_img = Counter(a["image_id"] for a in picked)
     assert max(per_img.values()) <= 2
@@ -57,12 +57,12 @@ def test_sample_is_deterministic():
 
 
 def test_sample_fills_shortfall_from_other_groups():
-    # only 5 accessories exist; total candidates still >= 100
-    anns = [ann(i, 24, 1000 + i, 80, 80) for i in range(5)]
-    anns += [ann(100 + i, 6, i, 120, 120) for i in range(60)]
-    anns += [ann(300 + i, 0, 500 + i, 120, 120) for i in range(60)]
+    # only 5 accessories exist; total candidates still >= 1000
+    anns = [ann(i, 24, 10000 + i, 80, 80) for i in range(5)]
+    anns += [ann(100 + i, 6, i, 120, 120) for i in range(600)]
+    anns += [ann(1000 + i, 0, 5000 + i, 120, 120) for i in range(600)]
     picked = sample_items(anns, random.Random(42))
-    assert len(picked) == 100
+    assert len(picked) == 1000
 
 
 def test_split_attributes():
