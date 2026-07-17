@@ -143,28 +143,67 @@ def submit_feedback(preferences, recommendation, score, text, session_id):
     return f"✅ Saved your feedback (score {record['score']}/5). Thanks!"
 
 
-with gr.Blocks(title="Clueless Outfit Picker") as demo:
-    gr.Markdown("# 👗 Clueless Outfit Picker\nEnter your taste → get an outfit → rate it.")
+CUTE_THEME = gr.themes.Soft(
+    primary_hue="pink",
+    secondary_hue="yellow",
+    neutral_hue="rose",
+    radius_size="lg",
+    font=[gr.themes.GoogleFont("Poppins"), "sans-serif"],
+)
 
-    session_id = gr.State(None)
+CUTE_CSS = """
+.gradio-container {
+    background: linear-gradient(135deg, #fff0f6 0%, #fffbe6 100%) !important;
+}
+#card {
+    max-width: 660px;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.72);
+    border-radius: 26px;
+    padding: 10px 26px 26px;
+    box-shadow: 0 10px 34px rgba(214, 51, 105, 0.16);
+}
+#title { text-align: center; }
+#title h1 { color: #d6336c; margin-bottom: 2px; }
+#get_btn {
+    background: linear-gradient(90deg, #ff8fab, #ffd670) !important;
+    color: #5a2a3a !important;
+    font-weight: 600 !important;
+    border: none !important;
+}
+#submit_btn { font-weight: 600 !important; }
+"""
 
-    preferences = gr.Textbox(
-        label="Your fashion preferences",
-        lines=4,
-        placeholder="e.g. I like linen and natural colors, loose comfortable fits, no heels...",
-    )
-    get_btn = gr.Button("Get an outfit", variant="primary")
+with gr.Blocks(title="Cher's Closet") as demo:
+    with gr.Column(elem_id="card"):
+        gr.Markdown(
+            "# 💛 Cher's Closet\n"
+            "#### *Ugh, as if you'd wear nothing cute.* Tell me your style and I'll pick a look. ✨",
+            elem_id="title",
+        )
 
-    recommendation = gr.Markdown(label="Suggested outfit")
+        session_id = gr.State(None)
 
-    score = gr.Slider(1, 5, value=3, step=1, label="How much do you like it? (1 = no, 5 = love it)")
-    feedback_text = gr.Textbox(
-        label="Optional comments",
-        lines=2,
-        placeholder='e.g. pretty good, but a little generic',
-    )
-    submit_btn = gr.Button("Submit feedback")
-    status = gr.Markdown()
+        preferences = gr.Textbox(
+            label="Tell me about your style 💬",
+            lines=4,
+            placeholder="e.g. I like linen and natural colors, loose comfy fits, no heels...",
+        )
+        get_btn = gr.Button("Match my look 💅", variant="primary", elem_id="get_btn")
+
+        recommendation = gr.Markdown(label="Your look 👗")
+
+        score = gr.Slider(
+            1, 5, value=3, step=1,
+            label="Rate this look 💖  (1 = as if, 5 = totally obsessed)",
+        )
+        feedback_text = gr.Textbox(
+            label="Spill the tea 🫖 (optional)",
+            lines=2,
+            placeholder="e.g. pretty good, but a little generic",
+        )
+        submit_btn = gr.Button("Send feedback 💌", elem_id="submit_btn")
+        status = gr.Markdown()
 
     get_btn.click(get_recommendation, [preferences, session_id], [recommendation, session_id])
     submit_btn.click(
@@ -175,4 +214,4 @@ with gr.Blocks(title="Clueless Outfit Picker") as demo:
 
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(theme=CUTE_THEME, css=CUTE_CSS)
