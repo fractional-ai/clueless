@@ -84,6 +84,12 @@ def start(persona_choice):
         yield [_thinking(note)], None, _beliefs()
         return
 
+    if not clueless.api_key_present():
+        # Same check and wording the CLI uses; without it the SDK's own
+        # "Could not resolve authentication method" surfaces instead.
+        yield [_thinking(f"⚠️ {clueless.API_KEY_MISSING}")], None, gr.update()
+        return
+
     yield (
         [_thinking("👗 Reading your memory and putting a first look together… "
                    "the first turn can take up to a minute.")],
@@ -144,12 +150,6 @@ def rate(score, comment, history, session_id):
     comment = (comment or "").strip()
     reaction = f"score: {score}" + (f', text: "{comment}"' if comment else "")
 
-    # Keep a lightweight local record in addition to the agent's memory.
-    with FEEDBACK_LOG.open("a") as f:
-        f.write(json.dumps(
-            {"ts": datetime.now(timezone.utc).isoformat(), "score": score, "text": comment}
-        ) + "\n")
-
     base = history + [{"role": "user", "content": f"⭐ {reaction}"}]
     yield base + [_thinking("💭 logging that and thinking…")], "", gr.update()
 
@@ -161,10 +161,21 @@ def rate(score, comment, history, session_id):
     )
     try:
         text_parts, notes = clueless.run_turn(_client(), session_id, prompt)
-        reply = "".join(text_parts).strip() or "_(no reply)_"
     except Exception as exc:
-        reply, notes = f"⚠️ {exc}", []
+        # The agent never got the reaction, so don't log it: a local record that
+        # claims a rating the agent never saw is worse than no record at all.
+        failed = (f"⚠️ {exc}\n\nYour rating didn't reach the stylist, so nothing was "
+                  "logged. Try sending it again.")
+        yield base + [{"role": "assistant", "content": failed}], "", gr.update()
+        return
 
+    # Delivered — only now is a local record honest. Secondary to the agent's memory.
+    with FEEDBACK_LOG.open("a") as f:
+        f.write(json.dumps(
+            {"ts": datetime.now(timezone.utc).isoformat(), "score": score, "text": comment}
+        ) + "\n")
+
+    reply = "".join(text_parts).strip() or "_(no reply)_"
     yield base + [{"role": "assistant", "content": reply + _notes_md(notes)}], "", _beliefs()
 
 

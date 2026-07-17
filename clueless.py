@@ -37,6 +37,9 @@ WADA = Path("samples/sanzo-wada/colors.json")
 
 REQUIRED_IDS = (".agent_id", ".environment_id", ".memory_store_id")
 
+# One wording for a missing key, used by the CLI and the UI alike.
+API_KEY_MISSING = "No ANTHROPIC_API_KEY found. Put it in .env or export it."
+
 # Read by the agent when the store mounts — restates the doctrine that travels
 # with the session. Shared by the CLI and the UI so both open identical sessions.
 MEMORY_INSTRUCTIONS = (
@@ -227,6 +230,12 @@ def run_turn(client: Anthropic, session_id: str, message: str) -> tuple[list[str
     return text_parts, memory_notes
 
 
+def api_key_present() -> bool:
+    """True once ANTHROPIC_API_KEY is set. Shared with the UI so both entrypoints
+    fail the same way on a missing key rather than leaking the SDK's own error."""
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
 def ids_present() -> bool:
     """True once create_agent.py has written the three id files."""
     return all(Path(f).exists() for f in REQUIRED_IDS)
@@ -296,8 +305,8 @@ def main() -> None:
     args = ap.parse_args()
 
     load_dotenv()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise SystemExit("No ANTHROPIC_API_KEY found. Put it in .env or export it.")
+    if not api_key_present():
+        raise SystemExit(API_KEY_MISSING)
     agent_id, environment_id, memory_store_id = read_ids()
 
     persona = None if args.no_persona else args.persona
