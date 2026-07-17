@@ -1,6 +1,9 @@
 # Datasets — multi-GB, never check in (download via scripts/download_polyvore.sh)
 data/
 
+# Fashionpedia val split cache for scripts/build_closet_dataset.py
+.fashionpedia-cache/
+
 # Python
 __pycache__/
 *.pyc
@@ -9,6 +12,14 @@ venv/
 
 # Env / secrets
 .env
+
+# Managed Agents resource IDs (workspace-specific, written by create_agent.py)
+.agent_id
+.environment_id
+.memory_store_id
+
+# Session transcripts
+outputs/
 
 # macOS
 .DS_Store
