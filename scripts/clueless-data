@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""clueless-data — query the Polyvore dataset (data/clueless.db). JSON out.
+
+Built for agents: structured subcommands for the common lookups, plus a
+read-only `sql` escape hatch. Run `clueless-data schema` to see the tables.
+
+  search "denim jacket" [--category tops] [--limit 10]
+  item 201813350
+  outfit 210750761
+  pairs-with 201813350 [--category shoes] [--limit 10]
+  random [--category bottoms] [--limit 5]
+  stats
+  schema
+  sql "SELECT ... "        (read-only)
+
+Prereq: python3 scripts/build_db.py (after scripts/download_polyvore.sh).
+"""
+import argparse
+import json
+import sqlite3
+import sys
+from pathlib import Path
+
+DB = Path(__file__).resolve().parent.parent / "data" / "clueless.db"
+
+ITEM_COLS = ("item_id, name, title, category_id, fine_category,"
+             " semantic_category, image_path, colors, formality, pattern,"
+             " silhouette, genre")
+
+
+def connect():
+    if not DB.exists():
+        sys.exit(f"error: {DB} not found — run scripts/download_polyvore.sh"
+                 " then python3 scripts/build_db.py")
+    con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    return con
+
+
+def out(rows):
+    if isinstance(rows, list):
+        rows = [dict(r) for r in rows]
+    elif isinstance(rows, sqlite3.Row):
+        rows = dict(rows)
+    print(json.dumps(rows, indent=2))
+
+
+def cmd_search(con, a):
+    fts = " ".join(f'"{t}"' for t in a.query.split())
+    q = (f"SELECT {ITEM_COLS} FROM items WHERE item_id IN"
+         " (SELECT item_id FROM items_fts WHERE items_fts MATCH ?)")
+    args = [fts]
+    if a.category:
+        q += " AND semantic_category = ?"
+        args.append(a.category)
+    out(con.execute(q + " LIMIT ?", args + [a.limit]).fetchall())
+
+
+def cmd_item(con, a):
+    row = con.execute(f"SELECT {ITEM_COLS} FROM items WHERE item_id=?",
+                      (a.item_id,)).fetchone()
+    if not row:
+        sys.exit(f"error: item {a.item_id} not found")
+    d = dict(row)
+    d["outfit_ids"] = [r[0] for r in con.execute(
+        "SELECT set_id FROM outfit_items WHERE item_id=?", (a.item_id,))]
+    out(d)
+
+
+def cmd_outfit(con, a):
+    o = con.execute("SELECT * FROM outfits WHERE set_id=?", (a.set_id,)).fetchone()
+    if not o:
+        sys.exit(f"error: outfit {a.set_id} not found")
+    d = dict(o)
+    d["items"] = [dict(r) for r in con.execute(
+        f"SELECT oi.position, {ITEM_COLS} FROM outfit_items oi"
+        " JOIN items USING (item_id) WHERE oi.set_id=? ORDER BY oi.position",
+        (a.set_id,))]
+    out(d)
+
+
+def cmd_pairs_with(con, a):
+    cols = ", ".join(f"items.{c.strip()}" for c in ITEM_COLS.split(","))
+    q = (f"SELECT {cols}, COUNT(*) AS n_shared_outfits FROM outfit_items b"
+         " JOIN items ON items.item_id = b.item_id"
+         " WHERE b.set_id IN (SELECT set_id FROM outfit_items WHERE item_id=?)"
+         " AND b.item_id != ?")
+    args = [a.item_id, a.item_id]
+    if a.category:
+        q += " AND semantic_category = ?"
+        args.append(a.category)
+    q += " GROUP BY b.item_id ORDER BY n_shared_outfits DESC LIMIT ?"
+    out(con.execute(q, args + [a.limit]).fetchall())
+
+
+def cmd_random(con, a):
+    q = f"SELECT {ITEM_COLS} FROM items"
+    args = []
+    if a.category:
+        q += " WHERE semantic_category = ?"
+        args.append(a.category)
+    out(con.execute(q + " ORDER BY random() LIMIT ?", args + [a.limit]).fetchall())
+
+
+def cmd_stats(con, a):
+    out({
+        "items": con.execute("SELECT COUNT(*) FROM items").fetchone()[0],
+        "outfits": con.execute("SELECT COUNT(*) FROM outfits").fetchone()[0],
+        "items_by_semantic_category": {r[0] or "none": r[1] for r in con.execute(
+            "SELECT semantic_category, COUNT(*) FROM items GROUP BY 1 ORDER BY 2 DESC")},
+        "enriched_items": con.execute(
+            "SELECT COUNT(*) FROM items WHERE formality IS NOT NULL").fetchone()[0],
+    })
+
+
+def cmd_schema(con, a):
+    print("\n".join(r[0] for r in con.execute(
+        "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL")))
+
+
+def cmd_sql(con, a):
+    out(con.execute(a.query).fetchall())
+
+
+def main():
+    p = argparse.ArgumentParser(prog="clueless-data",
+                                description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    def add(name, fn, *args, limit=None):
+        sp = sub.add_parser(name)
+        for arg in args:
+            sp.add_argument(arg)
+        if limit:
+            sp.add_argument("--category", help="semantic category filter"
+                            " (tops/bottoms/shoes/bags/...)")
+            sp.add_argument("--limit", type=int, default=limit)
+        sp.set_defaults(fn=fn)
+
+    add("search", cmd_search, "query", limit=10)
+    add("item", cmd_item, "item_id")
+    add("outfit", cmd_outfit, "set_id")
+    add("pairs-with", cmd_pairs_with, "item_id", limit=10)
+    add("random", cmd_random, limit=5)
+    add("stats", cmd_stats)
+    add("schema", cmd_schema)
+    add("sql", cmd_sql, "query")
+
+    a = p.parse_args()
+    a.fn(connect(), a)
+
+
+if __name__ == "__main__":
+    main()
