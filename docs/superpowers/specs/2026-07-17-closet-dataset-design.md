@@ -1,11 +1,11 @@
-# Closet Dataset Design — ~100 items from Fashionpedia
+# Closet Dataset Design — 1000 items from Fashionpedia
 
 **Date:** 2026-07-17
 **Status:** Approved (approach A)
 
 ## Purpose
 
-Build a small (~100 item) clothing dataset for the clueless memory-agent demo: a
+Build a small (1000 item) clothing dataset for the clueless memory-agent demo: a
 "closet" of individual items (tops, bottoms, accessories) that vary on category,
 material, and quality. The agent reasons over structured metadata; small images sit
 alongside each item for display in a demo UI (and optional vision calls later).
@@ -29,8 +29,8 @@ if the files are present.
 `synthetic-data/closet/` — committed to the repo (small enough that teammates never
 run the pipeline):
 
-- `items.jsonl` — 100 records, one per line
-- `images/item_NNN.jpg` — one crop per item, max side 256px, JPEG quality ~85 (~10–30KB each)
+- `items.jsonl` — 1000 records, one per line
+- `images/item_NNN.jpg` — one crop per item, max side 256px, JPEG quality ~85 (~10–30KB each, ~12MB total)
 
 ### Record schema
 
@@ -65,8 +65,8 @@ run the pipeline):
 
 ## Selection rules
 
-Target mix: ~40 tops (shirt/blouse, top/t-shirt/sweatshirt, sweater, cardigan,
-jacket, coat, dress), ~30 bottoms (pants, shorts, skirt), ~30 accessories (bag/wallet,
+Target mix: 400 tops (shirt/blouse, top/t-shirt/sweatshirt, sweater, cardigan,
+jacket, coat, dress), 300 bottoms (pants, shorts, skirt), 300 accessories (bag/wallet,
 shoe, glasses, hat, belt, watch, scarf/tie, headband).
 
 Filters:
@@ -88,12 +88,12 @@ One script: `scripts/build_closet_dataset.py`
 3. Sample per the mix with a fixed seed
 4. Crop/resize with Pillow; write JPEGs
 5. Synthesize condition/quality_tier; compose names; write `items.jsonl`
-6. Validate: 100 records, every referenced image exists, print counts per
+6. Validate: 1000 records, every referenced image exists, print counts per
    category/group/material
 
 Errors: skip degenerate bboxes, unreadable images, and annotations whose image file
 is missing from the zip; log each skip. Fail loudly (non-zero exit) if the total
-falls below 100 after fallbacks.
+falls below 1000 after fallbacks.
 
 ## Testing
 
@@ -103,4 +103,4 @@ crops visually and eyeball a few jsonl records for sane names/materials.
 ## Out of scope
 
 Price/value, brands, wear history (user deselected); sending images to the model via
-Files API; train-split download (4x+ larger, unnecessary for 100 items).
+Files API; train-split download (4x+ larger, unnecessary — the val split supplies the full 400/300/300 mix).
