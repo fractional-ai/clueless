@@ -11,9 +11,16 @@ Usage:
     python clueless.py                  # defaults to the priya persona
     python clueless.py --persona dante
     python clueless.py --no-persona     # you answer the interview yourself
+    python clueless.py --no-display     # skip present_picks writes to the live page
 
     /quit    end the session
     /memory  dump what it currently believes (without spending a turn)
+
+The agent has two custom tools alongside the built-in toolset:
+  - query_catalog  -> shells out to scripts/clueless-data (read-only dataset CLI)
+  - present_picks  -> guarded call into display.write_picks() (repo root, owned
+                       by the parallel feat/display-writer branch); a no-op with
+                       --no-display or if display.py isn't present yet.
 """
 
 # System python here is 3.9; defer annotation evaluation so `str | None` and
@@ -23,19 +30,44 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
+# display.py lives at the repo root and is owned by a parallel PR
+# (feat/display-writer). Guard the import: if it isn't there yet (or the
+# branch isn't merged), present_picks degrades to a no-op instead of crashing.
+try:
+    from display import write_picks  # type: ignore
+except ImportError:
+    write_picks = None  # type: ignore
+
 
 PERSONAS_DIR = Path("personas")
 CLOSETS_DIR = Path("closets")  # teammate's, may not exist yet
 POLYVORE = Path("samples/polyvore")
 WADA = Path("samples/sanzo-wada/colors.json")
+SCRIPTS_DIR = Path("scripts")
 
 REQUIRED_IDS = (".agent_id", ".environment_id", ".memory_store_id")
+
+NO_DISPLAY_MESSAGE = (
+    "display unavailable (display.py not found — is feat/display-writer merged?)"
+)
+CATALOG_TRUNCATE_AT = 30000
+CATALOG_TRUNCATE_SUFFIX = "\n...[truncated — narrow the query or lower --limit]"
+
+# query_catalog command -> the tool_input field that becomes its positional argv arg.
+CATALOG_POSITIONAL_FIELD = {
+    "search": "query",
+    "item": "item_id",
+    "outfit": "set_id",
+    "pairs-with": "item_id",
+    "sql": "query",
+}
 
 
 # ---------------------------------------------------------------- closet loading
@@ -133,24 +165,106 @@ def build_kickoff(persona_text: str | None, items: list[dict], using_fallback: b
     return "\n".join(parts)
 
 
+# ----------------------------------------------------------------- custom tools
+
+def build_catalog_argv(tool_input: dict) -> list:
+    """Build the argv for scripts/clueless-data from a query_catalog call.
+
+    Pure and side-effect-free (no subprocess) so it's testable in isolation.
+    Raises ValueError with a tool_result-ready message on a missing required
+    field.
+    """
+    command = tool_input.get("command")
+    if not command:
+        raise ValueError("missing required field command")
+
+    argv = [sys.executable, str(SCRIPTS_DIR / "clueless-data"), command]
+
+    positional_field = CATALOG_POSITIONAL_FIELD.get(command)
+    if positional_field:
+        value = tool_input.get(positional_field)
+        if not value:
+            raise ValueError(f"missing required field {positional_field} for {command}")
+        argv.append(str(value))
+
+    if tool_input.get("category"):
+        argv += ["--category", str(tool_input["category"])]
+    if tool_input.get("limit") is not None:
+        argv += ["--limit", str(tool_input["limit"])]
+
+    return argv
+
+
+def run_custom_tool(name: str, tool_input: dict, display_enabled: bool) -> tuple:
+    """Execute one custom tool call. Returns (result_text, is_error)."""
+    if name == "query_catalog":
+        try:
+            argv = build_catalog_argv(tool_input)
+        except ValueError as e:
+            return str(e), True
+
+        try:
+            proc = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            return "query timed out after 60s", True
+
+        if proc.returncode != 0:
+            return (proc.stderr or "").strip() or "query failed", True
+
+        stdout = proc.stdout or ""
+        if len(stdout) > CATALOG_TRUNCATE_AT:
+            stdout = stdout[:CATALOG_TRUNCATE_AT] + CATALOG_TRUNCATE_SUFFIX
+        return stdout, False
+
+    if name == "present_picks":
+        if write_picks is None:
+            return NO_DISPLAY_MESSAGE, False
+        try:
+            return write_picks(tool_input, enabled=display_enabled), False
+        except ValueError as e:
+            return str(e), True
+
+    return f"unknown tool {name}", True
+
+
 # --------------------------------------------------------------------- the loop
 
-def drain(client: Anthropic, session_id: str, message: str) -> None:
+def drain(
+    client: Anthropic,
+    session_id: str,
+    message: str,
+    display_enabled: bool = True,
+) -> None:
     """Send one message and stream until the agent genuinely stops.
 
     Stream-first, then send: the stream only delivers events emitted after it
     opens, so opening it second means missing the start of the turn.
+
+    Custom tool calls (agent.custom_tool_use) are collected as they arrive.
+    When the session goes idle with stop_reason.type == "requires_action",
+    every pending call named in stop_reason.event_ids (falling back to all
+    pending calls if that list is absent) is executed via run_custom_tool(),
+    the results are batched into ONE events.send, and we keep draining the
+    SAME stream — a custom tool call does not end the turn.
     """
     with client.beta.sessions.events.stream(session_id) as stream:
         client.beta.sessions.events.send(
             session_id,
             events=[{"type": "user.message", "content": [{"type": "text", "text": message}]}],
         )
+        pending = {}  # event.id -> (name, input)
+
         for event in stream:
             if event.type == "agent.message":
                 for block in event.content:
                     if getattr(block, "type", None) == "text":
                         print(block.text, end="", flush=True)
+
+            elif event.type == "agent.custom_tool_use":
+                name = getattr(event, "name", "?")
+                inp = getattr(event, "input", {}) or {}
+                pending[event.id] = (name, inp)
+                print(f"\n  \033[2m[tool: {name}]\033[0m", flush=True)
 
             elif event.type == "agent.tool_use":
                 name = getattr(event, "name", "?")
@@ -177,6 +291,25 @@ def drain(client: Anthropic, session_id: str, message: str) -> None:
                 # Only a non-requires_action stop_reason means the turn is over.
                 stop = getattr(event, "stop_reason", None)
                 if getattr(stop, "type", None) == "requires_action":
+                    event_ids = getattr(stop, "event_ids", None) or list(pending.keys())
+                    results = []
+                    for event_id in event_ids:
+                        if event_id not in pending:
+                            continue  # unknown id — skip it
+                        name, tool_input = pending.pop(event_id)
+                        result_text, is_error = run_custom_tool(
+                            name, tool_input, display_enabled
+                        )
+                        results.append(
+                            {
+                                "type": "user.custom_tool_result",
+                                "custom_tool_use_id": event_id,
+                                "content": [{"type": "text", "text": result_text}],
+                                "is_error": is_error,
+                            }
+                        )
+                    if results:
+                        client.beta.sessions.events.send(session_id, events=results)
                     continue
                 print()
                 return
@@ -200,7 +333,13 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--persona", default="priya", help="persona file stem, e.g. priya")
     ap.add_argument("--no-persona", action="store_true", help="interview interactively")
+    ap.add_argument(
+        "--no-display",
+        action="store_true",
+        help="disable present_picks writes to the live page",
+    )
     args = ap.parse_args()
+    display_enabled = not args.no_display
 
     load_dotenv()
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -258,7 +397,12 @@ def main() -> None:
     print(f"session: {session.id}")
     print(f"trace:   https://platform.claude.com/sessions/{session.id}\n")
 
-    drain(client, session.id, build_kickoff(persona_text, items, using_fallback))
+    drain(
+        client,
+        session.id,
+        build_kickoff(persona_text, items, using_fallback),
+        display_enabled=display_enabled,
+    )
 
     while True:
         try:
@@ -278,7 +422,7 @@ def main() -> None:
             continue
 
         print()
-        drain(client, session.id, said)
+        drain(client, session.id, said, display_enabled=display_enabled)
 
 
 if __name__ == "__main__":
