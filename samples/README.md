@@ -5,6 +5,26 @@ building without downloading anything. Regenerate with
 `python3 scripts/make_samples.py`; get the full data with
 `scripts/download_polyvore.sh --with-images` (goes to git-ignored `data/`).
 
+## Querying the full data (the agent's interface)
+
+After downloading, build the local SQLite DB and query it via the CLI:
+
+```sh
+./scripts/download_polyvore.sh --with-images   # ~2.75 GB → data/
+python3 scripts/build_db.py                    # → data/clueless.db (146 MB)
+
+scripts/clueless-data search "denim jacket" --category outerwear
+scripts/clueless-data outfit 210750761         # an outfit + all its items
+scripts/clueless-data pairs-with 201813350 --category shoes
+scripts/clueless-data random --category bottoms --limit 5
+scripts/clueless-data sql "SELECT ..."         # read-only escape hatch
+scripts/clueless-data schema                   # table definitions
+```
+
+All output is JSON. The `items` table has nullable enrichment columns
+(`colors`, `formality`, `pattern`, `silhouette`, `genre`) for a future
+vision-model tagging pass — the 5 outfit-judging principles.
+
 ## polyvore/ — outfit compatibility (the pairing dataset)
 
 Full set: 251k items, 68k outfits. Source: [Stylique/Polyvore on HF](https://huggingface.co/datasets/Stylique/Polyvore).

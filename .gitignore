@@ -23,3 +23,7 @@ outputs/
 
 # macOS
 .DS_Store
+
+# App
+app/node_modules/
+app/dist/

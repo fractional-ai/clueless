@@ -1,0 +1,24 @@
+{
+  "updated": "2026-07-17 3:20 PM",
+  "headline": "Your outfit — built for a guy who likes wearing suits: tailored, high formality, quiet palette.",
+  "sections": [
+    {
+      "heading": "The recommendation",
+      "blurb": "Sharp without the full suit: black wool suit trousers, crisp white oxford, black double monks. Everything sits at the same formality level, monochrome palette, slim silhouette top to bottom.",
+      "items": [
+        { "item_id": "118502942", "category": "shirt", "name": "carven mens slim oxford shirt", "reason": "Crisp white, slim cut, no pockets — the most suit-native shirt in the catalog." },
+        { "item_id": "132154002", "category": "pants", "name": "givenchy slim wool trousers", "reason": "True suit trousers (wool, slim, black) — the anchor of the look." },
+        { "item_id": "113129459", "category": "shoes", "name": "prada double monk strap shoe", "reason": "Double monks: formal enough for the trousers, more interesting than a plain oxford." }
+      ]
+    },
+    {
+      "heading": "Swaps if you want to dial it",
+      "blurb": "Same formality band, different accents.",
+      "items": [
+        { "item_id": "113396316", "category": "shirt", "name": "gucci white cotton chest pocket", "reason": "Slightly more relaxed shirt if the monks feel too formal." },
+        { "item_id": "201293382", "category": "shoes", "name": "cole haan rollins leather cap-toe", "reason": "The classic choice if double monks are too loud." },
+        { "item_id": "197743260", "category": "pants", "name": "wooyoungmi striped tailored trousers", "reason": "One pattern, if you want the trousers to be the focal point." }
+      ]
+    }
+  ]
+}
